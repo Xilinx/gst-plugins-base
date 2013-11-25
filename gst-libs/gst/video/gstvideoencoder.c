@@ -2174,7 +2174,9 @@ gst_video_encoder_send_header_unlocked (GstVideoEncoder * encoder,
         discont = FALSE;
       }
 
+      GST_VIDEO_ENCODER_STREAM_UNLOCK (encoder);
       gst_pad_push (encoder->srcpad, gst_buffer_ref (tmpbuf));
+      GST_VIDEO_ENCODER_STREAM_LOCK (encoder);
     }
     priv->new_headers = FALSE;
   }
@@ -2374,8 +2376,11 @@ gst_video_encoder_finish_frame (GstVideoEncoder * encoder,
   gst_video_encoder_release_frame (encoder, frame);
   frame = NULL;
 
-  if (ret == GST_FLOW_OK)
+  if (ret == GST_FLOW_OK) {
+    GST_VIDEO_ENCODER_STREAM_UNLOCK (encoder);
     ret = gst_pad_push (encoder->srcpad, buffer);
+    GST_VIDEO_ENCODER_STREAM_LOCK (encoder);
+  }
 
 done:
   /* handed out */

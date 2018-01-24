@@ -4788,9 +4788,8 @@ unpack_NV16_10LE32 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     const gint stride[GST_VIDEO_MAX_PLANES], gint x, gint y, gint width)
 {
   gint i;
-  gint uv = GET_UV_420 (y, flags);
   const guint32 *restrict sy = GET_PLANE_LINE (0, y);
-  const guint32 *restrict suv = GET_PLANE_LINE (1, uv);
+  const guint32 *restrict suv = GET_PLANE_LINE (1, y);
   guint16 *restrict d = dest;
   gint num_words = (width + 2) / 3;
   guint32 UV = 0;
@@ -4883,9 +4882,8 @@ pack_NV16_10LE32 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
     gint y, gint width)
 {
   gint i;
-  gint uv = GET_UV_420 (y, flags);
   guint32 *restrict dy = GET_PLANE_LINE (0, y);
-  guint32 *restrict duv = GET_PLANE_LINE (1, uv);
+  guint32 *restrict duv = GET_PLANE_LINE (1, y);
   const guint16 *restrict s = src;
   gint num_words = (width + 2) / 3;
   guint32 UV = 0;

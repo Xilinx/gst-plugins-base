@@ -1077,7 +1077,7 @@ _intersect_with_mview_modes (GstCaps * caps, const GValue * modes)
  * @caps: (transfer none): the #GstCaps to transform
  * @filter: (transfer none): a set of filter #GstCaps
  *
- * Provides an implementation of #GstBaseTransformClass::transform_caps()
+ * Provides an implementation of #GstBaseTransformClass.transform_caps()
  *
  * Returns: (transfer full): the converted #GstCaps
  *
@@ -1267,7 +1267,7 @@ _fixate_texture_target (GstGLViewConvert * viewconvert,
  * @caps: (transfer none): the #GstCaps of @direction
  * @othercaps: (transfer full): the #GstCaps to fixate
  *
- * Provides an implementation of #GstBaseTransformClass::fixate_caps()
+ * Provides an implementation of #GstBaseTransformClass.fixate_caps()
  *
  * Returns: (transfer full): the fixated #GstCaps
  *

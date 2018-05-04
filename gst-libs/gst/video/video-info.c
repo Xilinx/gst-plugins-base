@@ -237,7 +237,8 @@ static const gchar *interlace_mode[] = {
   "progressive",
   "interleaved",
   "mixed",
-  "fields"
+  "fields",
+  "alternate"
 };
 
 /**
@@ -602,6 +603,15 @@ gst_video_info_to_caps (GstVideoInfo * info)
     gst_caps_set_simple (caps, "field-order", G_TYPE_STRING,
         gst_video_field_order_to_string (GST_VIDEO_INFO_FIELD_ORDER (info)),
         NULL);
+  }
+
+  if (info->interlace_mode == GST_VIDEO_INTERLACE_MODE_ALTERNATE) {
+    /* 'alternate' mode must always be accompanied by interlaced caps feature.
+     */
+    GstCapsFeatures *features;
+
+    features = gst_caps_features_new (GST_CAPS_FEATURE_FORMAT_INTERLACED, NULL);
+    gst_caps_set_features (caps, 0, features);
   }
 
   if (GST_VIDEO_INFO_MULTIVIEW_MODE (info) != GST_VIDEO_MULTIVIEW_MODE_NONE) {

@@ -31,6 +31,14 @@ G_BEGIN_DECLS
 typedef struct _GstVideoInfo GstVideoInfo;
 
 /**
+ * GST_CAPS_FEATURE_FORMAT_INTERLACED:
+ *
+ * Name of the caps feature for indicating the stream is interlaced. Currently
+ * it is only used for video.
+ */
+#define GST_CAPS_FEATURE_FORMAT_INTERLACED "format:Interlaced"
+
+/**
  * GstVideoInterlaceMode:
  * @GST_VIDEO_INTERLACE_MODE_PROGRESSIVE: all frames are progressive
  * @GST_VIDEO_INTERLACE_MODE_INTERLEAVED: 2 fields are interleaved in one video
@@ -44,6 +52,10 @@ typedef struct _GstVideoInfo GstVideoInfo;
  *     Each field has only half the amount of lines as noted in the
  *     height property. This mode requires multiple GstVideoMeta metadata
  *     to describe the fields.
+ * @GST_VIDEO_INTERLACE_MODE_ALTERNATE: 1 field is stored in one buffer,
+ *     @GST_VIDEO_BUFFER_FLAG_TF or @GST_VIDEO_BUFFER_FLAG_BF indicates if
+ *     the buffer is carrying the top or bottom field, respectively. The top and
+ *     bottom buffers are expected to alternate in the pipeline, with this mode.
  *
  * The possible values of the #GstVideoInterlaceMode describing the interlace
  * mode of the stream.
@@ -52,7 +64,8 @@ typedef enum {
   GST_VIDEO_INTERLACE_MODE_PROGRESSIVE = 0,
   GST_VIDEO_INTERLACE_MODE_INTERLEAVED,
   GST_VIDEO_INTERLACE_MODE_MIXED,
-  GST_VIDEO_INTERLACE_MODE_FIELDS
+  GST_VIDEO_INTERLACE_MODE_FIELDS,
+  GST_VIDEO_INTERLACE_MODE_ALTERNATE,
 } GstVideoInterlaceMode;
 
 const gchar *          gst_video_interlace_mode_to_string    (GstVideoInterlaceMode mode);

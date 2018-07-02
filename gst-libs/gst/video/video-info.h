@@ -384,6 +384,13 @@ void           gst_video_info_free        (GstVideoInfo *info);
 gboolean       gst_video_info_set_format  (GstVideoInfo *info, GstVideoFormat format,
                                            guint width, guint height);
 
+gboolean       gst_video_info_set_interlaced_format
+                                          (GstVideoInfo         *info,
+                                           GstVideoFormat        format,
+                                           GstVideoInterlaceMode mode,
+                                           guint                 width,
+                                           guint                 height);
+
 gboolean       gst_video_info_from_caps   (GstVideoInfo *info, const GstCaps  * caps);
 
 GstCaps *      gst_video_info_to_caps     (GstVideoInfo *info);

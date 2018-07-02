@@ -693,7 +693,11 @@ fill_planes (GstVideoInfo * info)
   gint bpp = 0, i;
 
   width = (gsize) info->width;
-  height = (gsize) info->height;
+  if (GST_VIDEO_INFO_INTERLACE_MODE (info) ==
+      GST_VIDEO_INTERLACE_MODE_ALTERNATE)
+    height = (gsize) info->height / 2;
+  else
+    height = (gsize) info->height;
 
   /* Sanity check the resulting frame size for overflows */
   for (i = 0; i < GST_VIDEO_INFO_N_COMPONENTS (info); i++)

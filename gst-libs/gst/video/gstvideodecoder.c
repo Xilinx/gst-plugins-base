@@ -609,15 +609,16 @@ parse_fail:
 }
 
 static GstVideoCodecState *
-_new_output_state (GstVideoFormat fmt, guint width, guint height,
-    GstVideoCodecState * reference)
+_new_output_state (GstVideoFormat fmt, GstVideoInterlaceMode mode, guint width,
+    guint height, GstVideoCodecState * reference)
 {
   GstVideoCodecState *state;
 
   state = g_slice_new0 (GstVideoCodecState);
   state->ref_count = 1;
   gst_video_info_init (&state->info);
-  if (!gst_video_info_set_format (&state->info, fmt, width, height)) {
+  if (!gst_video_info_set_interlaced_format (&state->info, fmt, mode, width,
+          height)) {
     g_slice_free (GstVideoCodecState, state);
     return NULL;
   }
@@ -3441,6 +3442,59 @@ gst_video_decoder_get_output_state (GstVideoDecoder * decoder)
 }
 
 /**
+ * gst_video_decoder_set_interlaced_output_state:
+ * @decoder: a #GstVideoDecoder
+ * @fmt: a #GstVideoFormat
+ * @width: The width in pixels
+ * @height: The height in pixels
+ * @mode: A #GstVideoInterlaceMode
+ * @reference: (allow-none) (transfer none): An optional reference #GstVideoCodecState
+ *
+ * Same as #gst_video_decoder_set_output_state() but also allows you to also set
+ * the interlacing mode.
+ *
+ * Returns: (transfer full): the newly configured output state.
+ */
+GstVideoCodecState *
+gst_video_decoder_set_interlaced_output_state (GstVideoDecoder * decoder,
+    GstVideoFormat fmt, GstVideoInterlaceMode mode, guint width, guint height,
+    GstVideoCodecState * reference)
+{
+  GstVideoDecoderPrivate *priv = decoder->priv;
+  GstVideoCodecState *state;
+
+  GST_DEBUG_OBJECT (decoder, "fmt:%d, width:%d, height:%d, reference:%p",
+      fmt, width, height, reference);
+
+  /* Create the new output state */
+  state = _new_output_state (fmt, mode, width, height, reference);
+  if (!state)
+    return NULL;
+
+  GST_VIDEO_DECODER_STREAM_LOCK (decoder);
+
+  GST_OBJECT_LOCK (decoder);
+  /* Replace existing output state by new one */
+  if (priv->output_state)
+    gst_video_codec_state_unref (priv->output_state);
+  priv->output_state = gst_video_codec_state_ref (state);
+
+  if (priv->output_state != NULL && priv->output_state->info.fps_n > 0) {
+    priv->qos_frame_duration =
+        gst_util_uint64_scale (GST_SECOND, priv->output_state->info.fps_d,
+        priv->output_state->info.fps_n);
+  } else {
+    priv->qos_frame_duration = 0;
+  }
+  priv->output_state_changed = TRUE;
+  GST_OBJECT_UNLOCK (decoder);
+
+  GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
+
+  return state;
+}
+
+/**
  * gst_video_decoder_set_output_state:
  * @decoder: a #GstVideoDecoder
  * @fmt: a #GstVideoFormat
@@ -3470,38 +3524,8 @@ gst_video_decoder_set_output_state (GstVideoDecoder * decoder,
     GstVideoFormat fmt, guint width, guint height,
     GstVideoCodecState * reference)
 {
-  GstVideoDecoderPrivate *priv = decoder->priv;
-  GstVideoCodecState *state;
-
-  GST_DEBUG_OBJECT (decoder, "fmt:%d, width:%d, height:%d, reference:%p",
-      fmt, width, height, reference);
-
-  /* Create the new output state */
-  state = _new_output_state (fmt, width, height, reference);
-  if (!state)
-    return NULL;
-
-  GST_VIDEO_DECODER_STREAM_LOCK (decoder);
-
-  GST_OBJECT_LOCK (decoder);
-  /* Replace existing output state by new one */
-  if (priv->output_state)
-    gst_video_codec_state_unref (priv->output_state);
-  priv->output_state = gst_video_codec_state_ref (state);
-
-  if (priv->output_state != NULL && priv->output_state->info.fps_n > 0) {
-    priv->qos_frame_duration =
-        gst_util_uint64_scale (GST_SECOND, priv->output_state->info.fps_d,
-        priv->output_state->info.fps_n);
-  } else {
-    priv->qos_frame_duration = 0;
-  }
-  priv->output_state_changed = TRUE;
-  GST_OBJECT_UNLOCK (decoder);
-
-  GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
-
-  return state;
+  return gst_video_decoder_set_interlaced_output_state (decoder, fmt,
+      GST_VIDEO_INTERLACE_MODE_PROGRESSIVE, width, height, reference);
 }
 
 

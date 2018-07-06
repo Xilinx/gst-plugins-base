@@ -401,6 +401,10 @@ GstVideoCodecState *gst_video_decoder_set_output_state (GstVideoDecoder *decoder
 							GstVideoFormat fmt, guint width, guint height,
 							GstVideoCodecState *reference);
 
+GstVideoCodecState *gst_video_decoder_set_interlaced_output_state (GstVideoDecoder *decoder,
+                                                                   GstVideoFormat fmt, GstVideoInterlaceMode mode,
+                                                                   guint width, guint height, GstVideoCodecState *reference);
+
 GstVideoCodecState *gst_video_decoder_get_output_state (GstVideoDecoder *decoder);
 
 gboolean         gst_video_decoder_negotiate           (GstVideoDecoder * decoder);

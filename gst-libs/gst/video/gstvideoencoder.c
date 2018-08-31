@@ -2225,7 +2225,8 @@ gst_video_encoder_finish_frame (GstVideoEncoder * encoder,
   GstFlowReturn ret = GST_FLOW_OK;
   GstVideoEncoderClass *encoder_class;
   gboolean send_headers = FALSE;
-  gboolean discont = (frame->presentation_frame_number == 0);
+  gboolean discont = (frame->presentation_frame_number == 0
+      && frame->abidata.ABI.nb_slices == 0);
   GstBuffer *buffer;
 
   encoder_class = GST_VIDEO_ENCODER_GET_CLASS (encoder);
@@ -2383,6 +2384,110 @@ done:
   /* handed out */
   if (frame)
     gst_video_encoder_release_frame (encoder, frame);
+
+  GST_VIDEO_ENCODER_STREAM_UNLOCK (encoder);
+
+  return ret;
+}
+
+/**
+ * gst_video_encoder_finish_slice:
+ * @encoder: a #GstVideoEncoder
+ * @frame: (transfer none): a #GstVideoCodecFrame being encoded
+ * @slice: (transfer full): a #GstBuffer containing an encoded slice of @frame
+ *
+ * @slice must have a valid encoded data buffer, whose metadata fields
+ * are then appropriately set according to frame data.
+ * It is subsequently pushed downstream or provided to @pre_push temporarily
+ * using the frame->output_buffer field.
+ *
+ * If multiple slices are produced for one raw frame use this method
+ * for all the slices but the last one.
+ * #gst_video_encoder_finish_frame() needs to be called for the last slice
+ * to tell the encoder that the frame has been fully encoded.
+ *
+ * This function will change the metadata of @slice
+ *
+ * Returns: a #GstFlowReturn resulting from sending data downstream
+ * Since 1.16
+ */
+GstFlowReturn
+gst_video_encoder_finish_slice (GstVideoEncoder * encoder,
+    GstVideoCodecFrame * frame, GstBuffer * slice)
+{
+  GstVideoEncoderPrivate *priv = encoder->priv;
+  GstVideoEncoderClass *encoder_class;
+  GstFlowReturn ret = GST_FLOW_OK;
+  gboolean discont = (frame->presentation_frame_number == 0
+      && frame->abidata.ABI.nb_slices == 0);
+
+  encoder_class = GST_VIDEO_ENCODER_GET_CLASS (encoder);
+
+  GST_LOG_OBJECT (encoder,
+      "finish slice %d of frame fpn %d PTS %" GST_TIME_FORMAT ", DTS %"
+      GST_TIME_FORMAT, frame->abidata.ABI.nb_slices,
+      frame->presentation_frame_number, GST_TIME_ARGS (frame->pts),
+      GST_TIME_ARGS (frame->dts));
+
+  frame->abidata.ABI.nb_slices++;
+
+  GST_VIDEO_ENCODER_STREAM_LOCK (encoder);
+
+  ret = gst_video_encoder_can_push_unlocked (encoder);
+  if (ret != GST_FLOW_OK)
+    goto done;
+
+  gst_video_encoder_push_pending_unlocked (encoder, frame);
+
+  if (GST_VIDEO_CODEC_FRAME_IS_SYNC_POINT (frame)) {
+    GST_BUFFER_FLAG_UNSET (slice, GST_BUFFER_FLAG_DELTA_UNIT);
+    /* For keyframes, DTS = PTS, if encoder doesn't decide otherwise */
+    if (!GST_CLOCK_TIME_IS_VALID (frame->dts)) {
+      frame->dts = frame->pts;
+    }
+  } else {
+    GST_BUFFER_FLAG_SET (slice, GST_BUFFER_FLAG_DELTA_UNIT);
+  }
+
+  gst_video_encoder_infer_dts_unlocked (encoder, frame);
+
+  GST_BUFFER_PTS (slice) = frame->pts;
+  GST_BUFFER_DTS (slice) = frame->dts;
+
+  GST_OBJECT_LOCK (encoder);
+  /* update rate estimate */
+  priv->bytes += gst_buffer_get_size (slice);
+  GST_OBJECT_UNLOCK (encoder);
+
+  gst_video_encoder_send_header_unlocked (encoder, &discont);
+
+  if (G_UNLIKELY (discont)) {
+    GST_LOG_OBJECT (encoder, "marking discont");
+    GST_BUFFER_FLAG_SET (slice, GST_BUFFER_FLAG_DISCONT);
+  }
+
+  /* output_buffer is meant to hold the latest slice of the frame; ab(use) it
+   * to pass the buffer to pre_push() and transform_meta().
+   * Subclass has called finish_slice() so they should be aware that those
+   * functions are called with slices rather than full frames. */
+  frame->output_buffer = slice;
+
+  if (encoder_class->pre_push) {
+    ret = encoder_class->pre_push (encoder, frame);
+  }
+
+  gst_video_encoder_transform_meta_unlocked (encoder, frame);
+
+  frame->output_buffer = NULL;
+
+  if (ret == GST_FLOW_OK) {
+    ret = gst_pad_push (encoder->srcpad, slice);
+    slice = NULL;
+  }
+
+done:
+  if (slice)
+    gst_buffer_unref (slice);
 
   GST_VIDEO_ENCODER_STREAM_UNLOCK (encoder);
 

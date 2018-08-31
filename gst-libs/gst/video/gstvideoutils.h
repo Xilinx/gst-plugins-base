@@ -258,6 +258,7 @@ struct _GstVideoCodecFrame
     struct {
       GstClockTime ts;
       GstClockTime ts2;
+      guint nb_slices;
     } ABI;
     void         *padding[GST_PADDING_LARGE];
   } abidata;

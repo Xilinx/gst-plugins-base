@@ -2337,6 +2337,9 @@ gst_video_decoder_flush_parse (GstVideoDecoder * dec, gboolean at_eos)
       while (walk) {
         GstBuffer *buf = GST_BUFFER_CAST (walk->data);
 
+        priv->output_queued =
+            g_list_delete_link (priv->output_queued, priv->output_queued);
+
         if (G_LIKELY (res == GST_FLOW_OK)) {
           /* avoid stray DISCONT from forward processing,
            * which have no meaning in reverse pushing */
@@ -2361,8 +2364,6 @@ gst_video_decoder_flush_parse (GstVideoDecoder * dec, gboolean at_eos)
           gst_buffer_unref (buf);
         }
 
-        priv->output_queued =
-            g_list_delete_link (priv->output_queued, priv->output_queued);
         walk = priv->output_queued;
       }
 

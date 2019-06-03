@@ -106,7 +106,8 @@ gst_video_info_new (void)
   return info;
 }
 
-static gboolean fill_planes (GstVideoInfo * info);
+static gboolean fill_planes (GstVideoInfo * info,
+    gsize plane_size[GST_VIDEO_MAX_PLANES]);
 
 /**
  * gst_video_info_init:
@@ -240,7 +241,7 @@ gst_video_info_set_format (GstVideoInfo * info, GstVideoFormat format,
   if (!gst_video_info_set_format_common (info, format, width, height))
     return FALSE;
 
-  return fill_planes (info);
+  return fill_planes (info, NULL);
 }
 
 /**
@@ -268,7 +269,7 @@ gst_video_info_set_interlaced_format (GstVideoInfo * info,
     return FALSE;
 
   GST_VIDEO_INFO_INTERLACE_MODE (info) = mode;
-  return fill_planes (info);
+  return fill_planes (info, NULL);
 }
 
 static const gchar *interlace_mode[] = {
@@ -520,7 +521,7 @@ gst_video_info_from_caps (GstVideoInfo * info, const GstCaps * caps)
     set_default_colorimetry (info);
   }
 
-  if (!fill_planes (info))
+  if (!fill_planes (info, NULL))
     return FALSE;
 
   return TRUE;
@@ -744,7 +745,7 @@ gst_video_info_to_caps (GstVideoInfo * info)
 }
 
 static gboolean
-fill_planes (GstVideoInfo * info)
+fill_planes (GstVideoInfo * info, gsize plane_size[GST_VIDEO_MAX_PLANES])
 {
   gsize width, height, cr_h;
   gint bpp = 0, i;
@@ -1104,6 +1105,25 @@ fill_planes (GstVideoInfo * info)
       return FALSE;
       break;
   }
+
+  if (plane_size) {
+    for (i = 0; i < GST_VIDEO_MAX_PLANES; i++) {
+      if (i < GST_VIDEO_INFO_N_PLANES (info)) {
+        gint comps[GST_VIDEO_MAX_COMPONENTS];
+        guint plane_height;
+
+        /* Convert plane index to component index */
+        gst_video_format_info_component (info->finfo, i, comps);
+        plane_height =
+            GST_VIDEO_FORMAT_INFO_SCALE_HEIGHT (info->finfo, comps[0],
+            info->height);
+        plane_size[i] = plane_height * GST_VIDEO_INFO_PLANE_STRIDE (info, i);
+      } else {
+        plane_size[i] = 0;
+      }
+    }
+  }
+
   return TRUE;
 }
 
@@ -1234,21 +1254,23 @@ done:
 }
 
 /**
- * gst_video_info_align:
+ * gst_video_info_align_full:
  * @info: a #GstVideoInfo
  * @align: alignment parameters
+ * @plane_size: (out) (allow-none): array used to store the plane sizes
  *
- * Adjust the offset and stride fields in @info so that the padding and
- * stride alignment in @align is respected.
- *
- * Extra padding will be added to the right side when stride alignment padding
- * is required and @align will be updated with the new padding values.
+ * This variant of gst_video_info_align() provides the updated size, in bytes,
+ * of each video plane after the alignment, including all horizontal and vertical
+ * paddings.
  *
  * Returns: %FALSE if alignment could not be applied, e.g. because the
- *   size of a frame can't be represented as a 32 bit integer (Since: 1.12)
+ *   size of a frame can't be represented as a 32 bit integer
+ *
+ * Since: 1.18
  */
 gboolean
-gst_video_info_align (GstVideoInfo * info, GstVideoAlignment * align)
+gst_video_info_align_full (GstVideoInfo * info, GstVideoAlignment * align,
+    gsize plane_size[GST_VIDEO_MAX_PLANES])
 {
   const GstVideoFormatInfo *vinfo = info->finfo;
   gint width, height;
@@ -1300,7 +1322,7 @@ gst_video_info_align (GstVideoInfo * info, GstVideoAlignment * align)
     info->width = padded_width;
     info->height = padded_height;
 
-    if (!fill_planes (info))
+    if (!fill_planes (info, plane_size))
       return FALSE;
 
     /* check alignment */
@@ -1346,4 +1368,24 @@ gst_video_info_align (GstVideoInfo * info, GstVideoAlignment * align)
   }
 
   return TRUE;
+}
+
+/**
+ * gst_video_info_align:
+ * @info: a #GstVideoInfo
+ * @align: alignment parameters
+ *
+ * Adjust the offset and stride fields in @info so that the padding and
+ * stride alignment in @align is respected.
+ *
+ * Extra padding will be added to the right side when stride alignment padding
+ * is required and @align will be updated with the new padding values.
+ *
+ * Returns: %FALSE if alignment could not be applied, e.g. because the
+ *   size of a frame can't be represented as a 32 bit integer (Since: 1.12)
+ */
+gboolean
+gst_video_info_align (GstVideoInfo * info, GstVideoAlignment * align)
+{
+  return gst_video_info_align_full (info, align, NULL);
 }

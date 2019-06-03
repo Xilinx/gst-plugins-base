@@ -385,6 +385,14 @@ GType gst_video_info_get_type            (void);
 #define GST_VIDEO_INFO_N_PLANES(i)       (GST_VIDEO_FORMAT_INFO_N_PLANES((i)->finfo))
 #define GST_VIDEO_INFO_PLANE_OFFSET(i,p) ((i)->offset[p])
 #define GST_VIDEO_INFO_PLANE_STRIDE(i,p) ((i)->stride[p])
+/**
+ * GST_VIDEO_INFO_PLANE_HEIGHT:
+ *
+ * The padded height of a plane (padded size divided by the plane stride).
+ *
+ * Since: 1.18
+ */
+#define GST_VIDEO_INFO_PLANE_HEIGHT(i,p,sizes) ((i)->stride[p] == 0 ? 0 : sizes[p] / (i)->stride[p])
 
 /* dealing with components */
 #define GST_VIDEO_INFO_N_COMPONENTS(i)   GST_VIDEO_FORMAT_INFO_N_COMPONENTS((i)->finfo)
@@ -443,6 +451,9 @@ gboolean       gst_video_info_is_equal    (const GstVideoInfo *info,
 
 GST_VIDEO_API
 gboolean       gst_video_info_align       (GstVideoInfo * info, GstVideoAlignment * align);
+
+GST_VIDEO_API
+gboolean       gst_video_info_align_full  (GstVideoInfo * info, GstVideoAlignment * align, gsize plane_size[GST_VIDEO_MAX_PLANES]);
 
 
 #ifdef G_DEFINE_AUTOPTR_CLEANUP_FUNC

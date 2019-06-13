@@ -3376,6 +3376,7 @@ gst_video_decoder_have_frame (GstVideoDecoder * decoder)
   GstClockTime pts, dts, duration;
   guint flags;
   GstFlowReturn ret = GST_FLOW_OK;
+  gboolean unref_buffer = FALSE;
 
   GST_LOG_OBJECT (decoder, "have_frame at offset %" G_GUINT64_FORMAT,
       priv->frame_offset);
@@ -3389,15 +3390,31 @@ gst_video_decoder_have_frame (GstVideoDecoder * decoder)
     buffer = gst_buffer_new_and_alloc (0);
   }
 
-  priv->current_frame->input_buffer = buffer;
+  if (!priv->current_frame->input_buffer) {
+    priv->current_frame->input_buffer = buffer;
 
-  gst_video_decoder_get_buffer_info_at_offset (decoder,
-      priv->frame_offset, &pts, &dts, &duration, &flags);
+    gst_video_decoder_get_buffer_info_at_offset (decoder,
+        priv->frame_offset, &pts, &dts, &duration, &flags);
 
-  GST_BUFFER_PTS (buffer) = pts;
-  GST_BUFFER_DTS (buffer) = dts;
-  GST_BUFFER_DURATION (buffer) = duration;
-  GST_BUFFER_FLAGS (buffer) = flags;
+    GST_BUFFER_PTS (buffer) = pts;
+    GST_BUFFER_DTS (buffer) = dts;
+    GST_BUFFER_DURATION (buffer) = duration;
+    GST_BUFFER_FLAGS (buffer) = flags;
+  } else {
+    /* HACK: GstOMXVideoDec takes care of setting the input buffer ts and flags itself */
+    gst_buffer_copy_into (buffer, priv->current_frame->input_buffer,
+        GST_BUFFER_COPY_METADATA, 0, -1);
+
+    /* don't accumulate ts as we don't need them */
+    g_list_free_full (decoder->priv->timestamps,
+        (GDestroyNotify) timestamp_free);
+    decoder->priv->timestamps = NULL;
+
+    pts = GST_BUFFER_PTS (buffer);
+    dts = GST_BUFFER_DTS (buffer);
+    duration = GST_BUFFER_DURATION (buffer);
+    unref_buffer = TRUE;
+  }
 
   GST_LOG_OBJECT (decoder, "collected frame size %d, "
       "PTS %" GST_TIME_FORMAT ", DTS %" GST_TIME_FORMAT ", dur %"
@@ -3408,6 +3425,9 @@ gst_video_decoder_have_frame (GstVideoDecoder * decoder)
     GST_LOG_OBJECT (decoder, "Marking as sync point");
     GST_VIDEO_CODEC_FRAME_SET_SYNC_POINT (priv->current_frame);
   }
+
+  if (unref_buffer)
+    gst_buffer_unref (buffer);
 
   /* In reverse playback, just capture and queue frames for later processing */
   if (decoder->input_segment.rate < 0.0) {

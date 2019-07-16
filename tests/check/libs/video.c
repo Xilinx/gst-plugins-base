@@ -3051,38 +3051,91 @@ GST_START_TEST (test_video_formats_pstrides)
 
 GST_END_TEST;
 
-GST_START_TEST (test_video_flags)
+GST_START_TEST (test_video_format_info_plane_to_components)
 {
-  GstBuffer *buf;
-  GstVideoInfo info;
-  GstVideoFrame frame;
+  const GstVideoFormatInfo *info;
+  gint comps[GST_VIDEO_MAX_COMPONENTS];
 
-  gst_video_info_init (&info);
-  fail_unless (gst_video_info_set_interlaced_format (&info,
-          GST_VIDEO_FORMAT_RGB, GST_VIDEO_INTERLACE_MODE_ALTERNATE, 4, 4));
+  /* RGB: 1 plane, 3 components */
+  info = gst_video_format_get_info (GST_VIDEO_FORMAT_RGB);
 
-  buf = gst_buffer_new_and_alloc (GST_VIDEO_INFO_SIZE (&info));
-  fail_unless (gst_video_frame_map (&frame, &info, buf, GST_MAP_READ));
-  fail_unless (!GST_VIDEO_FRAME_IS_TOP_FIELD (&frame));
-  fail_unless (!GST_VIDEO_FRAME_IS_BOTTOM_FIELD (&frame));
-  gst_video_frame_unmap (&frame);
-  gst_buffer_unref (buf);
+  gst_video_format_info_component (info, 0, comps);
+  g_assert_cmpint (comps[0], ==, 0);
+  g_assert_cmpint (comps[1], ==, 1);
+  g_assert_cmpint (comps[2], ==, 2);
+  g_assert_cmpint (comps[3], ==, -1);
 
-  buf = gst_buffer_new_and_alloc (GST_VIDEO_INFO_SIZE (&info));
-  GST_BUFFER_FLAG_SET (buf, GST_VIDEO_BUFFER_FLAG_TOP_FIELD);
-  fail_unless (gst_video_frame_map (&frame, &info, buf, GST_MAP_READ));
-  fail_unless (GST_VIDEO_FRAME_IS_TOP_FIELD (&frame));
-  fail_unless (!GST_VIDEO_FRAME_IS_BOTTOM_FIELD (&frame));
-  gst_video_frame_unmap (&frame);
-  gst_buffer_unref (buf);
+  gst_video_format_info_component (info, 1, comps);
+  g_assert_cmpint (comps[0], ==, -1);
+  g_assert_cmpint (comps[1], ==, -1);
+  g_assert_cmpint (comps[2], ==, -1);
+  g_assert_cmpint (comps[3], ==, -1);
 
-  buf = gst_buffer_new_and_alloc (GST_VIDEO_INFO_SIZE (&info));
-  GST_BUFFER_FLAG_SET (buf, GST_VIDEO_BUFFER_FLAG_BOTTOM_FIELD);
-  fail_unless (gst_video_frame_map (&frame, &info, buf, GST_MAP_READ));
-  fail_unless (!GST_VIDEO_FRAME_IS_TOP_FIELD (&frame));
-  fail_unless (GST_VIDEO_FRAME_IS_BOTTOM_FIELD (&frame));
-  gst_video_frame_unmap (&frame);
-  gst_buffer_unref (buf);
+  gst_video_format_info_component (info, 2, comps);
+  g_assert_cmpint (comps[0], ==, -1);
+  g_assert_cmpint (comps[1], ==, -1);
+  g_assert_cmpint (comps[2], ==, -1);
+  g_assert_cmpint (comps[3], ==, -1);
+
+  gst_video_format_info_component (info, 3, comps);
+  g_assert_cmpint (comps[0], ==, -1);
+  g_assert_cmpint (comps[1], ==, -1);
+  g_assert_cmpint (comps[2], ==, -1);
+  g_assert_cmpint (comps[3], ==, -1);
+
+  /* I420: 3 planes, 3 components */
+  info = gst_video_format_get_info (GST_VIDEO_FORMAT_I420);
+
+  gst_video_format_info_component (info, 0, comps);
+  g_assert_cmpint (comps[0], ==, 0);
+  g_assert_cmpint (comps[1], ==, -1);
+  g_assert_cmpint (comps[2], ==, -1);
+  g_assert_cmpint (comps[3], ==, -1);
+
+  gst_video_format_info_component (info, 1, comps);
+  g_assert_cmpint (comps[0], ==, 1);
+  g_assert_cmpint (comps[1], ==, -1);
+  g_assert_cmpint (comps[2], ==, -1);
+  g_assert_cmpint (comps[3], ==, -1);
+
+  gst_video_format_info_component (info, 2, comps);
+  g_assert_cmpint (comps[0], ==, 2);
+  g_assert_cmpint (comps[1], ==, -1);
+  g_assert_cmpint (comps[2], ==, -1);
+  g_assert_cmpint (comps[3], ==, -1);
+
+  gst_video_format_info_component (info, 3, comps);
+  g_assert_cmpint (comps[0], ==, -1);
+  g_assert_cmpint (comps[1], ==, -1);
+  g_assert_cmpint (comps[2], ==, -1);
+  g_assert_cmpint (comps[3], ==, -1);
+
+  /* NV12: 2 planes, 3 components */
+  info = gst_video_format_get_info (GST_VIDEO_FORMAT_NV12);
+
+  gst_video_format_info_component (info, 0, comps);
+  g_assert_cmpint (comps[0], ==, 0);
+  g_assert_cmpint (comps[1], ==, -1);
+  g_assert_cmpint (comps[2], ==, -1);
+  g_assert_cmpint (comps[3], ==, -1);
+
+  gst_video_format_info_component (info, 1, comps);
+  g_assert_cmpint (comps[0], ==, 1);
+  g_assert_cmpint (comps[1], ==, 2);
+  g_assert_cmpint (comps[2], ==, -1);
+  g_assert_cmpint (comps[3], ==, -1);
+
+  gst_video_format_info_component (info, 2, comps);
+  g_assert_cmpint (comps[0], ==, -1);
+  g_assert_cmpint (comps[1], ==, -1);
+  g_assert_cmpint (comps[2], ==, -1);
+  g_assert_cmpint (comps[3], ==, -1);
+
+  gst_video_format_info_component (info, 3, comps);
+  g_assert_cmpint (comps[0], ==, -1);
+  g_assert_cmpint (comps[1], ==, -1);
+  g_assert_cmpint (comps[2], ==, -1);
+  g_assert_cmpint (comps[3], ==, -1);
 }
 
 GST_END_TEST;
@@ -3132,7 +3185,7 @@ video_suite (void)
   tcase_add_test (tc_chain, test_overlay_composition_over_transparency);
   tcase_add_test (tc_chain, test_video_format_enum_stability);
   tcase_add_test (tc_chain, test_video_formats_pstrides);
-  tcase_add_test (tc_chain, test_video_flags);
+  tcase_add_test (tc_chain, test_video_format_info_plane_to_components);
 
   return s;
 }

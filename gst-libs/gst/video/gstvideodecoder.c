@@ -318,6 +318,9 @@ struct _GstVideoDecoderPrivate
   /* Whether input is considered packetized or not */
   gboolean packetized;
 
+  /* whether input is considered as subframes */
+  gboolean subframe_mode;
+
   /* Error handling */
   gint max_errors;
   gint error_count;
@@ -1973,6 +1976,11 @@ gst_video_decoder_add_buffer_info (GstVideoDecoder * decoder,
   ts->flags = GST_BUFFER_FLAGS (buffer);
 
   priv->timestamps = g_list_append (priv->timestamps, ts);
+  if (g_list_length (priv->timestamps) > 10) {
+    GST_ERROR_OBJECT (decoder,
+        "decoder timestamp list getting long: %d timestamps,"
+        "possible internal leaking?", g_list_length (priv->timestamps));
+  }
 }
 
 static void
@@ -2151,6 +2159,9 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
   GstVideoDecoderPrivate *priv;
   GstVideoDecoderClass *klass;
   GstFlowReturn ret = GST_FLOW_OK;
+  gboolean last_subframe =
+      GST_BUFFER_FLAG_IS_SET (buf, GST_VIDEO_BUFFER_FLAG_MARKER);
+  gboolean header = GST_BUFFER_FLAG_IS_SET (buf, GST_BUFFER_FLAG_HEADER);
 
   klass = GST_VIDEO_DECODER_GET_CLASS (decoder);
   priv = decoder->priv;
@@ -2172,6 +2183,13 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
 
   priv->input_offset += gst_buffer_get_size (buf);
 
+  if (priv->subframe_mode) {
+    if (last_subframe)
+      priv->current_frame->abidata.ABI.num_subframes = 0;
+    else if (!header)
+      priv->current_frame->abidata.ABI.num_subframes++;
+  }
+
   if (priv->packetized) {
     gboolean was_keyframe = FALSE;
     if (!GST_BUFFER_FLAG_IS_SET (buf, GST_BUFFER_FLAG_DELTA_UNIT)) {
@@ -2188,7 +2206,11 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
     } else {
       ret = gst_video_decoder_decode_frame (decoder, priv->current_frame);
     }
-    priv->current_frame = NULL;
+    /* keep the current frame until we reach the last subframe in subframe mode */
+    if (!priv->subframe_mode || last_subframe)
+      priv->current_frame = NULL;
+    else
+      gst_buffer_unref (priv->current_frame->input_buffer);
     /* If in trick mode and it was a keyframe, drain decoder to avoid extra
      * latency. Only do this for forwards playback as reverse playback handles
      * draining on keyframes in flush_parse(), and would otherwise call back
@@ -3406,7 +3428,9 @@ gst_video_decoder_have_frame (GstVideoDecoder * decoder)
     ret = gst_video_decoder_decode_frame (decoder, priv->current_frame);
   }
   /* Current frame is gone now, either way */
-  priv->current_frame = NULL;
+  if (!priv->subframe_mode || !priv->current_frame->abidata.ABI.num_subframes)
+    priv->current_frame = NULL;
+
 
   GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
 
@@ -3454,12 +3478,18 @@ gst_video_decoder_decode_frame (GstVideoDecoder * decoder,
   frame->abidata.ABI.ts = frame->dts;
   frame->abidata.ABI.ts2 = frame->pts;
 
-  GST_LOG_OBJECT (decoder, "PTS %" GST_TIME_FORMAT ", DTS %" GST_TIME_FORMAT
-      ", dist %d", GST_TIME_ARGS (frame->pts), GST_TIME_ARGS (frame->dts),
+  GST_LOG_OBJECT (decoder,
+      "frame %p PTS %" GST_TIME_FORMAT ", DTS %" GST_TIME_FORMAT ", dist %d",
+      frame, GST_TIME_ARGS (frame->pts), GST_TIME_ARGS (frame->dts),
       frame->distance_from_sync);
 
-  gst_video_codec_frame_ref (frame);
-  priv->frames = g_list_append (priv->frames, frame);
+  if (!g_list_find (priv->frames, frame)) {
+    gst_video_codec_frame_ref (frame);
+    priv->frames = g_list_append (priv->frames, frame);
+  } else {
+    GST_LOG_OBJECT (decoder,
+        "Do not add an existing frame used to decode subframes");
+  }
 
   if (g_list_length (priv->frames) > 10) {
     GST_DEBUG_OBJECT (decoder, "decoder frame list getting long: %d frames,"
@@ -4328,6 +4358,35 @@ gboolean
 gst_video_decoder_get_packetized (GstVideoDecoder * decoder)
 {
   return decoder->priv->packetized;
+}
+
+/**
+ * gst_video_decoder_set_subframe_mode:
+ * @decoder: a #GstVideoDecoder
+ * @subframe_mode: whether the input data should be considered as subframes.
+ *
+ * Allows baseclass to consider input data as subframed or not.
+ */
+void
+gst_video_decoder_set_subframe_mode (GstVideoDecoder * decoder,
+    gboolean subframe_mode)
+{
+  decoder->priv->subframe_mode = subframe_mode;
+}
+
+/**
+ * gst_video_decoder_get_use_subframes:
+ * @decoder: a #GstVideoDecoder
+ *
+ * Queries whether input data is considered as subframes or not by the
+ * base class.
+ *
+ * Returns: TRUE if input data is considered as sub frames.
+ */
+gboolean
+gst_video_decoder_get_subframe_mode (GstVideoDecoder * decoder)
+{
+  return decoder->priv->subframe_mode;
 }
 
 /**

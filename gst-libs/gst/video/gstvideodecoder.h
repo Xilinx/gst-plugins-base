@@ -354,6 +354,13 @@ GST_VIDEO_API
 gboolean gst_video_decoder_get_packetized (GstVideoDecoder * decoder);
 
 GST_VIDEO_API
+void     gst_video_decoder_set_subframe_mode (GstVideoDecoder * decoder,
+                                           gboolean subframe_mode);
+
+GST_VIDEO_API
+gboolean gst_video_decoder_get_subframe_mode (GstVideoDecoder * decoder);
+
+GST_VIDEO_API
 void     gst_video_decoder_set_estimate_rate (GstVideoDecoder * dec,
 					      gboolean          enabled);
 

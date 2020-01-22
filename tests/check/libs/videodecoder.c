@@ -178,8 +178,9 @@ gst_video_decoder_tester_handle_frame (GstVideoDecoder * dec,
 
     if (frame->output_buffer)
       return gst_video_decoder_finish_frame (dec, frame);
-    gst_video_codec_frame_unref (frame);
   }
+  gst_video_codec_frame_unref (frame);
+
   return GST_FLOW_OK;
 }
 

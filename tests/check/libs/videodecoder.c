@@ -1274,11 +1274,15 @@ GST_START_TEST (videodecoder_playback_event_order)
 
 GST_END_TEST;
 
-#define MODE_NONE 0
-#define MODE_SUBFRAMES 0x01
-#define MODE_PACKETIZED 0x02
-#define MODE_MAX (MODE_PACKETIZED|MODE_SUBFRAMES)
-GST_START_TEST (videodecoder_playback_packetized_subframe_mode)
+typedef enum
+{
+  MODE_NONE = 0,
+  MODE_SUBFRAMES = 1,
+  MODE_PACKETIZED = 1 << 1,
+} SubframeMode;
+
+static void
+videodecoder_playback_packetized_subframe_mode (SubframeMode mode)
 {
   GstSegment segment;
   GstBuffer *buffer;
@@ -1287,9 +1291,7 @@ GST_START_TEST (videodecoder_playback_packetized_subframe_mode)
   gint num_buffers = NUM_BUFFERS;
   gint num_subframes = 1;
   GList *list;
-  gint mode = MODE_NONE;
 
-restart:
   setup_videodecodertester (NULL, NULL);
 
   /* Allow to test combination of subframes and packetized configuration
@@ -1319,7 +1321,7 @@ restart:
   fail_unless (gst_pad_push_event (mysrcpad, gst_event_new_segment (&segment)));
 
   /* push header only in packetized subframe mode */
-  if (mode == MODE_MAX) {
+  if (mode == (MODE_PACKETIZED | MODE_SUBFRAMES)) {
     buffer = gst_buffer_new_and_alloc (0);
     GST_BUFFER_FLAG_SET (buffer, GST_BUFFER_FLAG_HEADER);
     fail_unless (gst_pad_push (mysrcpad, buffer) == GST_FLOW_OK);
@@ -1372,11 +1374,33 @@ restart:
   buffers = NULL;
 
   cleanup_videodecodertest ();
+}
 
-  if (mode < MODE_MAX) {
-    mode++;
-    goto restart;
-  }
+GST_START_TEST (videodecoder_playback_parsed)
+{
+  videodecoder_playback_packetized_subframe_mode (MODE_NONE);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (videodecoder_playback_packetized)
+{
+  videodecoder_playback_packetized_subframe_mode (MODE_PACKETIZED);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (videodecoder_playback_parsed_subframes)
+{
+  videodecoder_playback_packetized_subframe_mode (MODE_SUBFRAMES);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (videodecoder_playback_packetized_subframes)
+{
+  videodecoder_playback_packetized_subframe_mode (MODE_SUBFRAMES |
+      MODE_PACKETIZED);
 }
 
 GST_END_TEST;
@@ -1407,7 +1431,10 @@ gst_videodecoder_suite (void)
       G_N_ELEMENTS (test_default_caps));
 
   tcase_add_test (tc, videodecoder_playback_event_order);
-  tcase_add_test (tc, videodecoder_playback_packetized_subframe_mode);
+  tcase_add_test (tc, videodecoder_playback_parsed);
+  tcase_add_test (tc, videodecoder_playback_packetized);
+  tcase_add_test (tc, videodecoder_playback_parsed_subframes);
+  tcase_add_test (tc, videodecoder_playback_packetized_subframes);
 
   return s;
 }

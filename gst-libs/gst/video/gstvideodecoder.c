@@ -485,6 +485,9 @@ static gboolean gst_video_decoder_src_query_default (GstVideoDecoder * decoder,
 static gboolean gst_video_decoder_transform_meta_default (GstVideoDecoder *
     decoder, GstVideoCodecFrame * frame, GstMeta * meta);
 
+static void gst_video_decoder_copy_metas (GstVideoDecoder * decoder,
+    GstVideoCodecFrame * frame, GstBuffer * buffer);
+
 /* we can't use G_DEFINE_ABSTRACT_TYPE because we need the klass in the _init
  * method to get to the padtemplates */
 GType
@@ -2203,8 +2206,10 @@ gst_video_decoder_chain_forward (GstVideoDecoder * decoder,
       GST_VIDEO_CODEC_FRAME_SET_SYNC_POINT (frame);
     }
 
-    if (frame->input_buffer)
+    if (frame->input_buffer) {
+      gst_video_decoder_copy_metas (decoder, frame, frame->input_buffer);
       gst_buffer_unref (frame->input_buffer);
+    }
     frame->input_buffer = buf;
 
     if (decoder->input_segment.rate < 0.0) {
@@ -3029,12 +3034,42 @@ foreach_metadata (GstBuffer * inbuf, GstMeta ** meta, gpointer user_data)
    * function and when it returns %TRUE */
   if (do_copy && info->transform_func) {
     GstMetaTransformCopy copy_data = { FALSE, 0, -1 };
+    GstBuffer *buffer;
+
     GST_DEBUG_OBJECT (decoder, "copy metadata %s", g_type_name (info->api));
     /* simply copy then */
-    info->transform_func (frame->output_buffer, *meta, inbuf,
-        _gst_meta_transform_copy, &copy_data);
+
+    buffer = frame->output_buffer;
+    if (G_UNLIKELY (buffer)) {
+      if (frame->abidata.ABI.meta_buffer == NULL)
+        frame->abidata.ABI.meta_buffer = gst_buffer_new ();
+      buffer = frame->abidata.ABI.meta_buffer = gst_buffer_new ();
+    }
+
+    info->transform_func (buffer, *meta, inbuf, _gst_meta_transform_copy,
+        &copy_data);
   }
   return TRUE;
+}
+
+static void
+gst_video_decoder_copy_metas (GstVideoDecoder * decoder,
+    GstVideoCodecFrame * frame, GstBuffer * buffer)
+{
+  GstVideoDecoderClass *decoder_class = GST_VIDEO_DECODER_GET_CLASS (decoder);
+
+  if (decoder_class->transform_meta) {
+    if (G_LIKELY (buffer)) {
+      CopyMetaData data;
+
+      data.decoder = decoder;
+      data.frame = frame;
+      gst_buffer_foreach_meta (buffer, foreach_metadata, &data);
+    } else {
+      GST_WARNING_OBJECT (decoder,
+          "Can't copy metadata because input frame disappeared");
+    }
+  }
 }
 
 /**
@@ -3058,7 +3093,6 @@ gst_video_decoder_finish_frame (GstVideoDecoder * decoder,
     GstVideoCodecFrame * frame)
 {
   GstFlowReturn ret = GST_FLOW_OK;
-  GstVideoDecoderClass *decoder_class = GST_VIDEO_DECODER_GET_CLASS (decoder);
   GstVideoDecoderPrivate *priv = decoder->priv;
   GstBuffer *output_buffer;
   gboolean needs_reconfigure = FALSE;
@@ -3118,18 +3152,11 @@ gst_video_decoder_finish_frame (GstVideoDecoder * decoder,
     GST_BUFFER_FLAG_SET (output_buffer, GST_BUFFER_FLAG_DISCONT);
   }
 
-  if (decoder_class->transform_meta) {
-    if (G_LIKELY (frame->input_buffer)) {
-      CopyMetaData data;
 
-      data.decoder = decoder;
-      data.frame = frame;
-      gst_buffer_foreach_meta (frame->input_buffer, foreach_metadata, &data);
-    } else {
-      GST_WARNING_OBJECT (decoder,
-          "Can't copy metadata because input frame disappeared");
-    }
-  }
+  if (G_UNLIKELY (frame->abidata.ABI.meta_buffer))
+    gst_video_decoder_copy_metas (decoder, frame,
+        frame->abidata.ABI.meta_buffer);
+  gst_video_decoder_copy_metas (decoder, frame, frame->input_buffer);
 
   /* Get an additional ref to the buffer, which is going to be pushed
    * downstream, the original ref is owned by the frame
@@ -3415,6 +3442,8 @@ gst_video_decoder_have_frame (GstVideoDecoder * decoder)
   }
 
   if (priv->current_frame->input_buffer) {
+    gst_video_decoder_copy_metas (decoder, priv->current_frame,
+        priv->current_frame->input_buffer);
     gst_buffer_unref (priv->current_frame->input_buffer);
   }
   priv->current_frame->input_buffer = buffer;

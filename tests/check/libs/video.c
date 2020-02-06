@@ -3704,6 +3704,30 @@ GST_START_TEST (test_hdr)
 
 GST_END_TEST;
 
+GST_START_TEST (test_video_flags)
+{
+  GstBuffer *buf;
+
+  buf = gst_buffer_new ();
+  fail_unless (!GST_VIDEO_BUFFER_IS_TOP_FIELD (buf));
+  fail_unless (!GST_VIDEO_BUFFER_IS_BOTTOM_FIELD (buf));
+  gst_buffer_unref (buf);
+
+  buf = gst_buffer_new ();
+  GST_BUFFER_FLAG_SET (buf, GST_VIDEO_BUFFER_FLAG_TOP_FIELD);
+  fail_unless (GST_VIDEO_BUFFER_IS_TOP_FIELD (buf));
+  fail_unless (!GST_VIDEO_BUFFER_IS_BOTTOM_FIELD (buf));
+  gst_buffer_unref (buf);
+
+  buf = gst_buffer_new ();
+  GST_BUFFER_FLAG_SET (buf, GST_VIDEO_BUFFER_FLAG_BOTTOM_FIELD);
+  fail_unless (!GST_VIDEO_BUFFER_IS_TOP_FIELD (buf));
+  fail_unless (GST_VIDEO_BUFFER_IS_BOTTOM_FIELD (buf));
+  gst_buffer_unref (buf);
+}
+
+GST_END_TEST;
+
 static Suite *
 video_suite (void)
 {
@@ -3753,6 +3777,7 @@ video_suite (void)
   tcase_add_test (tc_chain, test_video_info_align);
   tcase_add_test (tc_chain, test_video_meta_align);
   tcase_add_test (tc_chain, test_hdr);
+  tcase_add_test (tc_chain, test_video_flags);
 
   return s;
 }

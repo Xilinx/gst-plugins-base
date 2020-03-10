@@ -781,7 +781,7 @@ GST_START_TEST (test_dar_calc)
           &display_ratio_d, 720, 480, 32, 27, 1, 1));
   fail_unless (display_ratio_n == 16 && display_ratio_d == 9);
 
-  /* video 360x288, par 533333/500000, display par 16/15 = 
+  /* video 360x288, par 533333/500000, display par 16/15 =
    * dar 1599999/1600000 */
   fail_unless (gst_video_calculate_display_ratio (&display_ratio_n,
           &display_ratio_d, 360, 288, 533333, 500000, 16, 15));
@@ -3052,6 +3052,165 @@ GST_START_TEST (test_video_formats_pstrides)
 
 GST_END_TEST;
 
+GST_START_TEST (test_hdr)
+{
+  GstCaps *caps;
+  GstCaps *other_caps;
+  GstVideoMasteringDisplayInfo minfo;
+  GstVideoMasteringDisplayInfo other_minfo;
+  GstVideoMasteringDisplayInfo minfo_from_caps;
+  GstVideoContentLightLevel level;
+  GstVideoContentLightLevel other_level;
+  GstVideoContentLightLevel level_from_caps;
+  GstStructure *s = NULL;
+  gchar *minfo_str;
+  gchar *level_str = NULL;
+  gint i;
+  guint val;
+
+
+  gst_video_mastering_display_info_init (&minfo);
+  gst_video_mastering_display_info_init (&other_minfo);
+
+  /* Test GstVideoMasteringDisplayInfo, initialize with random values
+   * just for comparison */
+  val = 1;
+  for (i = 0; i < G_N_ELEMENTS (minfo.display_primaries); i++) {
+    minfo.display_primaries[i].x = val++;
+    minfo.display_primaries[i].y = val++;
+  }
+  minfo.white_point.x = val++;
+  minfo.white_point.y = val++;
+  minfo.max_display_mastering_luminance = val++;
+  minfo.min_display_mastering_luminance = val++;
+
+  caps = gst_caps_new_empty_simple ("video/x-raw");
+  minfo_str = gst_video_mastering_display_info_to_string (&minfo);
+  fail_unless (minfo_str != NULL, "cannot convert info to string");
+  GST_DEBUG ("converted mastering info string %s", minfo_str);
+
+  gst_caps_set_simple (caps, "mastering-display-info",
+      G_TYPE_STRING, minfo_str, NULL);
+  g_free (minfo_str);
+  minfo_str = NULL;
+
+  /* manually parsing mastering info from string */
+  s = gst_caps_get_structure (caps, 0);
+  minfo_str = (gchar *) gst_structure_get_string (s, "mastering-display-info");
+  fail_unless (minfo_str != NULL);
+  fail_unless (gst_video_mastering_display_info_from_string
+      (&other_minfo, minfo_str), "cannot get mastering info from string");
+  GST_DEBUG ("extracted info string %s", minfo_str);
+
+  fail_unless (gst_video_mastering_display_info_is_equal (&minfo,
+          &other_minfo), "Extracted mastering info is not equal to original");
+
+  /* simplified version for caps use case */
+  fail_unless (gst_video_mastering_display_info_from_caps (&minfo_from_caps,
+          caps), "cannot parse mastering info from caps");
+  fail_unless (gst_video_mastering_display_info_is_equal (&minfo,
+          &minfo_from_caps),
+      "Extracted mastering info is not equal to original");
+
+  /* check _add_to_caps () and manually created one */
+  other_caps = gst_caps_new_empty_simple ("video/x-raw");
+  fail_unless (gst_video_mastering_display_info_add_to_caps (&other_minfo,
+          other_caps));
+  fail_unless (gst_caps_is_equal (caps, other_caps));
+
+  gst_caps_unref (caps);
+  gst_caps_unref (other_caps);
+
+  /* Test GstVideoContentLightLevel */
+  gst_video_content_light_level_init (&level);
+  gst_video_content_light_level_init (&other_level);
+
+  level.max_content_light_level = 1000;
+  level.max_frame_average_light_level = 300;
+
+  caps = gst_caps_new_empty_simple ("video/x-raw");
+  level_str = gst_video_content_light_level_to_string (&level);
+  fail_unless (level_str != NULL);
+
+  gst_caps_set_simple (caps, "content-light-level",
+      G_TYPE_STRING, level_str, NULL);
+  g_free (level_str);
+
+  /* manually parsing CLL info from string */
+  s = gst_caps_get_structure (caps, 0);
+  fail_unless (gst_structure_get (s, "content-light-level",
+          G_TYPE_STRING, &level_str, NULL), "Failed to get level from caps");
+  fail_unless (gst_video_content_light_level_from_string (&other_level,
+          level_str));
+  g_free (level_str);
+
+  fail_unless_equals_int (level.max_content_light_level,
+      other_level.max_content_light_level);
+  fail_unless_equals_int (level.max_frame_average_light_level,
+      other_level.max_frame_average_light_level);
+
+  /* simplified version for caps use case */
+  fail_unless (gst_video_content_light_level_from_caps (&level_from_caps,
+          caps));
+  fail_unless_equals_int (level.max_content_light_level,
+      level_from_caps.max_content_light_level);
+  fail_unless_equals_int (level.max_frame_average_light_level,
+      level_from_caps.max_frame_average_light_level);
+
+  /* check _add_to_caps () and manually created one */
+  other_caps = gst_caps_new_empty_simple ("video/x-raw");
+  fail_unless (gst_video_content_light_level_add_to_caps (&other_level,
+          other_caps));
+  fail_unless (gst_caps_is_equal (caps, other_caps));
+
+  gst_caps_unref (caps);
+  gst_caps_unref (other_caps);
+}
+
+GST_END_TEST;
+
+GST_START_TEST (test_video_color_from_to_iso)
+{
+  gint i;
+
+#define ISO_IEC_UNSPECIFIED_COLOR_VALUE 2
+
+  for (i = 0; i <= GST_VIDEO_COLOR_MATRIX_BT2020; i++) {
+    guint matrix_val = gst_video_color_matrix_to_iso (i);
+    fail_unless_equals_int (gst_video_color_matrix_from_iso (matrix_val), i);
+  }
+
+  for (i = 0; i <= GST_VIDEO_TRANSFER_ARIB_STD_B67; i++) {
+    guint transfer_val = gst_video_color_transfer_to_iso (i);
+
+    /* don't know how to map below values to spec. */
+    if (i == GST_VIDEO_TRANSFER_GAMMA18 || i == GST_VIDEO_TRANSFER_GAMMA20
+        || i == GST_VIDEO_TRANSFER_ADOBERGB) {
+      fail_unless_equals_int (transfer_val, ISO_IEC_UNSPECIFIED_COLOR_VALUE);
+      continue;
+    }
+
+    fail_unless_equals_int (gst_video_color_transfer_from_iso (transfer_val),
+        i);
+  }
+
+  for (i = 0; i <= GST_VIDEO_COLOR_PRIMARIES_EBU3213; i++) {
+    guint primaries_val = gst_video_color_primaries_to_iso (i);
+
+    /* don't know how to map below value to spec. */
+    if (i == GST_VIDEO_COLOR_PRIMARIES_ADOBERGB) {
+      fail_unless_equals_int (primaries_val, ISO_IEC_UNSPECIFIED_COLOR_VALUE);
+      continue;
+    }
+
+    fail_unless_equals_int (gst_video_color_primaries_from_iso (primaries_val),
+        i);
+  }
+#undef ISO_IEC_UNSPECIFIED_COLOR_VALUE
+}
+
+GST_END_TEST;
+
 GST_START_TEST (test_video_format_info_plane_to_components)
 {
   const GstVideoFormatInfo *info;
@@ -3581,168 +3740,6 @@ GST_START_TEST (test_video_meta_align)
   g_assert (!gst_video_meta_set_alignment (meta, alig));
 
   gst_buffer_unref (buf);
-}
-
-GST_END_TEST;
-
-GST_START_TEST (test_hdr)
-{
-  GstCaps *caps;
-  GstCaps *other_caps;
-  GstVideoMasteringDisplayInfo minfo;
-  GstVideoMasteringDisplayInfo other_minfo;
-  GstVideoMasteringDisplayInfo minfo_from_caps;
-  GstVideoContentLightLevel level;
-  GstVideoContentLightLevel other_level;
-  GstVideoContentLightLevel level_from_caps;
-  GstStructure *s = NULL;
-  gchar *minfo_str;
-  gchar *level_str = NULL;
-
-  gst_video_mastering_display_info_init (&minfo);
-  gst_video_mastering_display_info_init (&other_minfo);
-
-  /* Test GstVideoMasteringDisplayInfo */
-  minfo.Rx_n = 1;
-  minfo.Ry_n = 2;
-  minfo.Gx_n = 3;
-  minfo.Gy_n = 4;
-  minfo.Bx_n = 5;
-  minfo.By_n = 6;
-  minfo.Wx_n = 7;
-  minfo.Wy_n = 8;
-
-  minfo.max_luma_n = 9990;
-  minfo.min_luma_n = 10;
-
-  minfo.Rx_d = minfo.Ry_d = minfo.Gx_d = minfo.Gy_d = minfo.Bx_d =
-      minfo.By_d = minfo.Wx_d = minfo.Wy_d = minfo.max_luma_d =
-      minfo.min_luma_d = 10;
-
-  caps = gst_caps_new_empty_simple ("video/x-raw");
-  minfo_str = gst_video_mastering_display_info_to_string (&minfo);
-  fail_unless (minfo_str != NULL, "cannot convert info to string");
-  GST_DEBUG ("converted mastering info string %s", minfo_str);
-
-  gst_caps_set_simple (caps, "mastering-display-info",
-      G_TYPE_STRING, minfo_str, NULL);
-  g_free (minfo_str);
-  minfo_str = NULL;
-
-  /* manually parsing mastering info from string */
-  s = gst_caps_get_structure (caps, 0);
-  minfo_str = (gchar *) gst_structure_get_string (s, "mastering-display-info");
-  fail_unless (minfo_str != NULL);
-  fail_unless (gst_video_mastering_display_info_from_string
-      (&other_minfo, minfo_str), "cannot get mastering info from string");
-  GST_DEBUG ("extracted info string %s", minfo_str);
-
-  fail_unless (gst_video_mastering_display_info_is_equal (&minfo,
-          &other_minfo), "Extracted mastering info is not equal to original");
-
-  /* simplified version for caps use case */
-  fail_unless (gst_video_mastering_display_info_from_caps (&minfo_from_caps,
-          caps), "cannot parse mastering info from caps");
-  fail_unless (gst_video_mastering_display_info_is_equal (&minfo,
-          &minfo_from_caps),
-      "Extracted mastering info is not equal to original");
-
-  /* check _add_to_caps () and manually created one */
-  other_caps = gst_caps_new_empty_simple ("video/x-raw");
-  fail_unless (gst_video_mastering_display_info_add_to_caps (&other_minfo,
-          other_caps));
-  fail_unless (gst_caps_is_equal (caps, other_caps));
-
-  gst_caps_unref (caps);
-  gst_caps_unref (other_caps);
-
-  /* Test GstVideoContentLightLevel */
-  gst_video_content_light_level_init (&level);
-  gst_video_content_light_level_init (&other_level);
-  level.maxCLL_n = 1000;
-  level.maxCLL_d = 1;
-  level.maxFALL_n = 300;
-  level.maxFALL_d = 1;
-
-  caps = gst_caps_new_empty_simple ("video/x-raw");
-  level_str = gst_video_content_light_level_to_string (&level);
-  fail_unless (level_str != NULL);
-
-  gst_caps_set_simple (caps, "content-light-level",
-      G_TYPE_STRING, level_str, NULL);
-  g_free (level_str);
-
-  /* manually parsing CLL info from string */
-  s = gst_caps_get_structure (caps, 0);
-  fail_unless (gst_structure_get (s, "content-light-level",
-          G_TYPE_STRING, &level_str, NULL), "Failed to get level from caps");
-  fail_unless (gst_video_content_light_level_from_string (&other_level,
-          level_str));
-  g_free (level_str);
-
-  fail_unless_equals_int (level.maxCLL_n, other_level.maxCLL_n);
-  fail_unless_equals_int (level.maxCLL_d, other_level.maxCLL_d);
-  fail_unless_equals_int (level.maxFALL_n, other_level.maxFALL_n);
-  fail_unless_equals_int (level.maxFALL_d, other_level.maxFALL_d);
-
-  /* simplified version for caps use case */
-  fail_unless (gst_video_content_light_level_from_caps (&level_from_caps,
-          caps));
-  fail_unless_equals_int (level.maxCLL_n, level_from_caps.maxCLL_n);
-  fail_unless_equals_int (level.maxCLL_d, level_from_caps.maxCLL_d);
-  fail_unless_equals_int (level.maxFALL_n, level_from_caps.maxFALL_n);
-  fail_unless_equals_int (level.maxFALL_d, level_from_caps.maxFALL_d);
-
-  /* check _add_to_caps () and manually created one */
-  other_caps = gst_caps_new_empty_simple ("video/x-raw");
-  fail_unless (gst_video_content_light_level_add_to_caps (&other_level,
-          other_caps));
-  fail_unless (gst_caps_is_equal (caps, other_caps));
-
-  gst_caps_unref (caps);
-  gst_caps_unref (other_caps);
-}
-
-GST_END_TEST;
-
-GST_START_TEST (test_video_color_from_to_iso)
-{
-  gint i;
-
-#define ISO_IEC_UNSPECIFIED_COLOR_VALUE 2
-
-  for (i = 0; i <= GST_VIDEO_COLOR_MATRIX_BT2020; i++) {
-    guint matrix_val = gst_video_color_matrix_to_iso (i);
-    fail_unless_equals_int (gst_video_color_matrix_from_iso (matrix_val), i);
-  }
-
-  for (i = 0; i <= GST_VIDEO_TRANSFER_ARIB_STD_B67; i++) {
-    guint transfer_val = gst_video_color_transfer_to_iso (i);
-
-    /* don't know how to map below values to spec. */
-    if (i == GST_VIDEO_TRANSFER_GAMMA18 || i == GST_VIDEO_TRANSFER_GAMMA20
-        || i == GST_VIDEO_TRANSFER_ADOBERGB) {
-      fail_unless_equals_int (transfer_val, ISO_IEC_UNSPECIFIED_COLOR_VALUE);
-      continue;
-    }
-
-    fail_unless_equals_int (gst_video_color_transfer_from_iso (transfer_val),
-        i);
-  }
-
-  for (i = 0; i <= GST_VIDEO_COLOR_PRIMARIES_EBU3213; i++) {
-    guint primaries_val = gst_video_color_primaries_to_iso (i);
-
-    /* don't know how to map below value to spec. */
-    if (i == GST_VIDEO_COLOR_PRIMARIES_ADOBERGB) {
-      fail_unless_equals_int (primaries_val, ISO_IEC_UNSPECIFIED_COLOR_VALUE);
-      continue;
-    }
-
-    fail_unless_equals_int (gst_video_color_primaries_from_iso (primaries_val),
-        i);
-  }
-#undef ISO_IEC_UNSPECIFIED_COLOR_VALUE
 }
 
 GST_END_TEST;

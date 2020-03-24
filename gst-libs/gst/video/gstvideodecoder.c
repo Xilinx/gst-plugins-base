@@ -2913,8 +2913,7 @@ gst_video_decoder_release_frame (GstVideoDecoder * dec,
     frame->events = NULL;
   }
 
-  if (dec->priv->current_frame == frame
-      && GST_BUFFER_FLAG_IS_SET (frame->input_buffer, GST_BUFFER_FLAG_MARKER)) {
+  if (dec->priv->current_frame == frame) {
     dec->priv->current_frame = NULL;
     gst_video_codec_frame_unref (frame);
   }

@@ -2682,7 +2682,6 @@ gst_video_decoder_prepare_finish_frame (GstVideoDecoder *
   GstVideoDecoderPrivate *priv = decoder->priv;
   GList *l, *events = NULL;
   gboolean sync;
-  gboolean found_frame = FALSE;
 
 #ifndef GST_DISABLE_GST_DEBUG
   GST_LOG_OBJECT (decoder, "n %d in %" G_GSIZE_FORMAT " out %" G_GSIZE_FORMAT,
@@ -2708,20 +2707,8 @@ gst_video_decoder_prepare_finish_frame (GstVideoDecoder *
       tmp->events = NULL;
     }
 
-    if (tmp == frame) {
-      found_frame = TRUE;
+    if (tmp == frame)
       break;
-    }
-  }
-
-  /* When using XLNXLL the OMX decoder will produce its frame before it has
-   * received all the slides. As a result the frame won't appear in
-   * priv->frames. But we still need to push its events to not break the
-   * ordering. */
-  if (!found_frame) {
-    GST_LOG_OBJECT (decoder, "finishing an incomplete frame (XLNXLL)");
-    events = g_list_concat (frame->events, events);
-    frame->events = NULL;
   }
 
   if (dropping || !decoder->priv->output_state) {

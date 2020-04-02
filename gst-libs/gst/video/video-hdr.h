@@ -92,7 +92,7 @@ GstVideoHDR10PlusMeta *gst_buffer_add_video_hdr10_plus_meta (GstBuffer * buffer,
 /**
  * GstVideoMasteringDisplayInfoCoordinates:
  * @x: the x coordinate of CIE 1931 color space in unit of 0.00002.
- * @x: the y coordinate of CIE 1931 color space in unit of 0.00002.
+ * @y: the y coordinate of CIE 1931 color space in unit of 0.00002.
  *
  * Used to represent display_primaries and white_point of
  * #GstVideoMasteringDisplayInfo struct. See #GstVideoMasteringDisplayInfo

@@ -41,6 +41,27 @@
   (m)->max_display_mastering_luminance, \
   (m)->min_display_mastering_luminance
 
+/**
+ * gst_video_hdr_format_to_string:
+ * @format: a #GstVideoHDRFormat
+ *
+ * Gets a string representing the given hdr format.
+ *
+ * Since: 1.18
+ */
+const gchar *
+gst_video_hdr_format_to_string (GstVideoHDRFormat format)
+{
+  switch (format) {
+    case GST_VIDEO_HDR_FORMAT_HDR10:
+      return "hdr10";
+    case GST_VIDEO_HDR_FORMAT_HDR10_PLUS:
+      return "hdr10+";
+    default:
+      return "";
+  }
+}
+
 /* g_ascii_string_to_unsigned is available since 2.54. Get rid of this wrapper
  * when we bump the version in 1.18 */
 #if !GLIB_CHECK_VERSION(2,54,0)

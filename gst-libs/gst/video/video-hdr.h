@@ -73,7 +73,7 @@ const GstMetaInfo *gst_video_hdr10_plus_meta_get_info (void);
 #define GST_VIDEO_HDR10_PLUS_META_INFO (gst_video_hdr10_plus_meta_get_info())
 
 #define gst_buffer_get_video_hdr10_plus_meta(b) \
-        ((GstVideoHDR10PlusMeta*)gst_buffer_get_meta((b)))
+        ((GstVideoHDR10PlusMeta*)gst_buffer_get_meta((b), GST_VIDEO_HDR10_PLUS_META_API_TYPE))
 
 /**
  * gst_buffer_get_video_hdr10_plus_meta:

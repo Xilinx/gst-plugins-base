@@ -411,18 +411,17 @@ set_hwparams (GstAlsaSrc * alsa)
   }
 #endif
 
-  if (alsa->period_time != -1) {
-    /* set the period time */
-    CHECK (snd_pcm_hw_params_set_period_time_near (alsa->handle, params,
-            &alsa->period_time, NULL), period_time);
-    GST_DEBUG_OBJECT (alsa, "period time %u", alsa->period_time);
-  }
-
   if (alsa->buffer_time != -1) {
     /* set the buffer time */
     CHECK (snd_pcm_hw_params_set_buffer_time_near (alsa->handle, params,
             &alsa->buffer_time, NULL), buffer_time);
     GST_DEBUG_OBJECT (alsa, "buffer time %u", alsa->buffer_time);
+  }
+  if (alsa->period_time != -1) {
+    /* set the period time */
+    CHECK (snd_pcm_hw_params_set_period_time_near (alsa->handle, params,
+            &alsa->period_time, NULL), period_time);
+    GST_DEBUG_OBJECT (alsa, "period time %u", alsa->period_time);
   }
 
   /* write the parameters to device */

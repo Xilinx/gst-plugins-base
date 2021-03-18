@@ -491,21 +491,6 @@ retry:
   }
 #endif
 
-  if (period_time != -1 && !alsa->iec958) {
-    /* set the period time */
-    if ((err = snd_pcm_hw_params_set_period_time_near (alsa->handle, params,
-                &period_time, NULL)) < 0) {
-      GST_ELEMENT_WARNING (alsa, RESOURCE, SETTINGS, (NULL),
-          ("Unable to set period time %i for playback: %s",
-              period_time, snd_strerror (err)));
-      /* disable period_time the next round */
-      period_time = -1;
-      goto retry;
-    }
-    GST_DEBUG_OBJECT (alsa, "period time %u", period_time);
-    alsa->period_time = period_time;
-  }
-
   /* now try to configure the buffer time and period time, if one
    * of those fail, we fall back to the defaults and emit a warning. */
   if (buffer_time != -1 && !alsa->iec958) {
@@ -521,6 +506,20 @@ retry:
     }
     GST_DEBUG_OBJECT (alsa, "buffer time %u", buffer_time);
     alsa->buffer_time = buffer_time;
+  }
+  if (period_time != -1 && !alsa->iec958) {
+    /* set the period time */
+    if ((err = snd_pcm_hw_params_set_period_time_near (alsa->handle, params,
+                &period_time, NULL)) < 0) {
+      GST_ELEMENT_WARNING (alsa, RESOURCE, SETTINGS, (NULL),
+          ("Unable to set period time %i for playback: %s",
+              period_time, snd_strerror (err)));
+      /* disable period_time the next round */
+      period_time = -1;
+      goto retry;
+    }
+    GST_DEBUG_OBJECT (alsa, "period time %u", period_time);
+    alsa->period_time = period_time;
   }
 
   /* Set buffer size and period size manually for SPDIF */
